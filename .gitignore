@@ -1,0 +1,55 @@
+# CMake / C++
+/build/
+/build-*/
+/cmake-build-*/
+CMakeUserPresets.json
+compile_commands.json
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Android / Gradle
+.gradle/
+.kotlin/
+**/build/
+.cxx/
+.externalNativeBuild/
+local.properties
+captures/
+*.apk
+*.aab
+*.iml
+*.jks
+*.keystore
+keystore.properties
+
+# Python / AI
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+
+# Local services and secrets
+.env
+/storage/
+/data/
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

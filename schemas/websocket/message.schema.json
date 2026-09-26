@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pocketscene.dev/schemas/websocket/message.schema.json",
+  "title": "PocketScene review message",
+  "oneOf": [
+    { "$ref": "#/$defs/joinSession" },
+    { "$ref": "#/$defs/pointerMove" },
+    { "$ref": "#/$defs/selectionChanged" },
+    { "$ref": "#/$defs/annotationCreated" },
+    { "$ref": "#/$defs/sessionSnapshot" },
+    { "$ref": "#/$defs/error" }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "vec3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number" }
+    },
+    "surfaceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeIndex", "primitiveIndex", "triangleIndex", "barycentric"],
+      "properties": {
+        "nodeIndex": { "type": "integer", "minimum": 0 },
+        "primitiveIndex": { "type": "integer", "minimum": 0 },
+        "triangleIndex": { "type": "integer", "minimum": 0 },
+        "barycentric": {
+          "allOf": [
+            { "$ref": "#/$defs/vec3" },
+            {
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    "base": {
+      "type": "object",
+      "required": ["protocolVersion", "type", "messageId", "sessionId", "sentAt"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "type": { "type": "string" },
+        "messageId": { "$ref": "#/$defs/uuid" },
+        "sessionId": { "$ref": "#/$defs/uuid" },
+        "sentAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "joinSession": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["type", "payload"],
+          "properties": {
+            "type": { "const": "join_session" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["assetVersionId"],
+              "properties": {
+                "assetVersionId": { "$ref": "#/$defs/uuid" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "pointerMove": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["type", "payload"],
+          "properties": {
+            "type": { "const": "pointer_move" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["participantId", "sequence", "anchor"],
+              "properties": {
+                "participantId": { "$ref": "#/$defs/uuid" },
+                "sequence": { "type": "integer", "minimum": 0 },
+                "anchor": { "$ref": "#/$defs/surfaceAnchor" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "selectionChanged": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["type", "payload"],
+          "properties": {
+            "type": { "const": "selection_changed" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["participantId", "sequence", "nodeIndex"],
+              "properties": {
+                "participantId": { "$ref": "#/$defs/uuid" },
+                "sequence": { "type": "integer", "minimum": 0 },
+                "nodeIndex": {
+                  "type": ["integer", "null"],
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "annotationCreated": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["type", "payload"],
+          "properties": {
+            "type": { "const": "annotation_created" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["annotationId", "assetVersionId"],
+              "properties": {
+                "annotationId": { "$ref": "#/$defs/uuid" },
+                "assetVersionId": { "$ref": "#/$defs/uuid" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "participant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "displayName"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "displayName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sessionSnapshot": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["type", "payload"],
+          "properties": {
+            "type": { "const": "session_snapshot" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["assetVersionId", "participants"],
+              "properties": {
+                "assetVersionId": { "$ref": "#/$defs/uuid" },
+                "participants": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/participant" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["type", "payload"],
+          "properties": {
+            "type": { "const": "error" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "message"],
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+$"
+                },
+                "message": { "type": "string" },
+                "relatedMessageId": { "$ref": "#/$defs/uuid" }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
