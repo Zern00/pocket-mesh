@@ -1,0 +1,22 @@
+name: pocketscene
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pocketscene}
+      POSTGRES_USER: ${POSTGRES_USER:-pocketscene}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pocketscene-dev}
+    ports:
+      - "${POCKETSCENE_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pocketscene-postgres:/var/lib/postgresql/data
+      - ../server/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pocketscene} -d ${POSTGRES_DB:-pocketscene}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pocketscene-postgres:

@@ -1,0 +1,778 @@
+openapi: 3.1.0
+info:
+  title: PocketScene Public API
+  version: 0.1.0
+  description: >-
+    Provisional contract between the mobile client and the C++ backend. Internal
+    AI and storage APIs are intentionally excluded.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: System
+  - name: Auth
+  - name: Projects
+  - name: Assets
+  - name: Annotations
+  - name: Search
+  - name: Sessions
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Process is ready to receive requests.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authentication succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  minLength: 1
+      responses:
+        "200":
+          description: Tokens rotated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/projects:
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Projects visible to the current user.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Project"
+                  nextCursor:
+                    type: [string, "null"]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Projects]
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Project created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/projects/{projectId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      tags: [Projects]
+      operationId: getProject
+      responses:
+        "200":
+          description: Project details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/assets:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      tags: [Assets]
+      operationId: listProjectAssets
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Assets in the project.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Asset"
+                  nextCursor:
+                    type: [string, "null"]
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Assets]
+      operationId: createAsset
+      description: >-
+        Creates asset metadata and a pending first version. Upload the GLB bytes
+        through the returned content endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssetRequest"
+      responses:
+        "201":
+          description: Asset and pending version created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAssetResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/assets/{assetId}:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      tags: [Assets]
+      operationId: getAsset
+      responses:
+        "200":
+          description: Asset metadata and versions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetDetails"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/asset-versions/{versionId}/content:
+    parameters:
+      - $ref: "#/components/parameters/VersionId"
+    put:
+      tags: [Assets]
+      operationId: uploadAssetVersionContent
+      description: MVP upload path. The backend streams the body into storage.
+      requestBody:
+        required: true
+        content:
+          model/gltf-binary:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "202":
+          description: Content accepted for validation and processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetVersion"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: Upload exceeds the configured limit.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    get:
+      tags: [Assets]
+      operationId: downloadAssetVersionContent
+      responses:
+        "200":
+          description: GLB contents.
+          content:
+            model/gltf-binary:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/asset-versions/{versionId}/annotations:
+    parameters:
+      - $ref: "#/components/parameters/VersionId"
+    get:
+      tags: [Annotations]
+      operationId: listAnnotations
+      responses:
+        "200":
+          description: Persistent annotations for this exact asset version.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Annotation"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Annotations]
+      operationId: createAnnotation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnnotationRequest"
+      responses:
+        "201":
+          description: Annotation committed and ready to broadcast.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Annotation"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/search/text:
+    post:
+      tags: [Search]
+      operationId: searchAssetsByText
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TextSearchRequest"
+      responses:
+        "200":
+          description: Ranked assets visible to the current user.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SearchResult"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Search model is temporarily unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/v1/asset-versions/{versionId}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/VersionId"
+    post:
+      tags: [Sessions]
+      operationId: createReviewSession
+      responses:
+        "201":
+          description: Review session created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewSession"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    Unauthorized:
+      description: Authentication is missing or invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: The current user cannot access this resource.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Request conflicts with current resource state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ValidationError:
+      description: Request validation failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+          pattern: "^[a-z0-9_]+$"
+        detail:
+          type: string
+        traceId:
+          type: string
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, displayName]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        password:
+          type: string
+          minLength: 10
+          maxLength: 128
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+
+    AuthTokens:
+      type: object
+      additionalProperties: false
+      required: [accessToken, refreshToken, expiresInSeconds]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresInSeconds:
+          type: integer
+          minimum: 1
+
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+
+    Project:
+      type: object
+      additionalProperties: false
+      required: [id, name, role, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateAssetRequest:
+      type: object
+      additionalProperties: false
+      required: [name, contentLength, contentSha256]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        contentLength:
+          type: integer
+          minimum: 1
+        contentSha256:
+          type: string
+          pattern: "^[a-fA-F0-9]{64}$"
+
+    CreateAssetResponse:
+      type: object
+      additionalProperties: false
+      required: [asset, version, contentUrl]
+      properties:
+        asset:
+          $ref: "#/components/schemas/Asset"
+        version:
+          $ref: "#/components/schemas/AssetVersion"
+        contentUrl:
+          type: string
+          format: uri-reference
+
+    Asset:
+      type: object
+      additionalProperties: false
+      required: [id, projectId, name, latestVersion, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        latestVersion:
+          anyOf:
+            - $ref: "#/components/schemas/AssetVersion"
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+
+    AssetDetails:
+      type: object
+      additionalProperties: false
+      required: [id, projectId, name, latestVersion, createdAt, versions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        latestVersion:
+          anyOf:
+            - $ref: "#/components/schemas/AssetVersion"
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetVersion"
+
+    AssetVersion:
+      type: object
+      additionalProperties: false
+      required: [id, assetId, versionNumber, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        assetId:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [pending_upload, processing, ready, failed]
+        byteSize:
+          type: [integer, "null"]
+          minimum: 0
+        contentSha256:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    SurfaceAnchor:
+      type: object
+      additionalProperties: false
+      required: [nodeIndex, primitiveIndex, triangleIndex, barycentric]
+      properties:
+        nodeIndex:
+          type: integer
+          minimum: 0
+        primitiveIndex:
+          type: integer
+          minimum: 0
+        triangleIndex:
+          type: integer
+          minimum: 0
+        barycentric:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            type: number
+            minimum: 0
+            maximum: 1
+
+    CreateAnnotationRequest:
+      type: object
+      additionalProperties: false
+      required: [anchor, body]
+      properties:
+        anchor:
+          $ref: "#/components/schemas/SurfaceAnchor"
+        body:
+          type: string
+          minLength: 1
+          maxLength: 4000
+
+    Annotation:
+      type: object
+      additionalProperties: false
+      required: [id, assetVersionId, authorId, anchor, body, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        assetVersionId:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+        anchor:
+          $ref: "#/components/schemas/SurfaceAnchor"
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TextSearchRequest:
+      type: object
+      additionalProperties: false
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 500
+        projectId:
+          type: string
+          format: uuid
+        maxTriangles:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+
+    SearchResult:
+      type: object
+      additionalProperties: false
+      required: [asset, score]
+      properties:
+        asset:
+          $ref: "#/components/schemas/Asset"
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    ReviewSession:
+      type: object
+      additionalProperties: false
+      required: [id, assetVersionId, websocketUrl, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        assetVersionId:
+          type: string
+          format: uuid
+        websocketUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+
+security:
+  - bearerAuth: []
